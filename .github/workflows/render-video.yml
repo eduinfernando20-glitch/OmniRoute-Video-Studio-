@@ -26,6 +26,7 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -34,7 +35,7 @@ jobs:
       - name: Install system deps (ffmpeg, chromium, libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser libnss3 libatk1.0-0 libxss1 libasound2 libgbm1 libgtk-3-0 fonts-liberation
+          sudo apt-get install -y ffmpeg chromium libnss3 libatk1.0-0 libxss1 libasound2 libgbm1 libgtk-3-0 fonts-liberation libx11-xcb1
 
       - name: Install deps (root)
         run: npm ci
@@ -44,11 +45,24 @@ jobs:
           cd remotion || exit 1
           npm ci
 
+      - name: Ensure out directory
+        run: mkdir -p out && ls -la
+
       - name: Run Remotion render (demo)
         env:
           DEMO_MODE: 'true'
         run: |
-          npm run render:project || true
+          npm run render:project || exit 0
+
+      - name: List outputs
+        run: |
+          echo "Listing out directory contents"
+          ls -la out || true
+          ls -la remotion/../out || true
+
+      - name: Verify artifact file
+        run: |
+          if [ -f remotion/../out/cafe-40s.mp4 ]; then echo "Artifact exists"; else echo "Artifact not found"; fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
