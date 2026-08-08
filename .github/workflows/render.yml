@@ -2,10 +2,61 @@ name: CI - build and render
 
 on:
   workflow_dispatch:
+    inputs:
+      duration:
+        description: "Duración del video en segundos"
+        required: true
+        default: "60"
+        type: string
+
+      title:
+        description: "Título del video"
+        required: false
+        default: "El viaje del café"
+        type: string
 
 jobs:
-  build-and-render:
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate project
+        run: |
+          node --version
+          test -f projects/El-viaje-del-cafe/scene.json
+          test -f remotion/src/index.tsx
+          test -f remotion/src/Video.tsx
+          test -f remotion/render.js
+
+          node -e "
+          const fs=require('fs');
+          const p='projects/El-viaje-del-cafe/scene.json';
+          const data=JSON.parse(fs.readFileSync(p,'utf8'));
+
+          if(!Array.isArray(data.scenes) || data.scenes.length===0){
+            throw new Error('scene.json no contiene escenas');
+          }
+
+          const total=data.scenes.reduce((a,s)=>a+Number(s.duration||0),0);
+
+          console.log('Escenas:', data.scenes.length);
+          console.log('Duración scene.json:', total, 'segundos');
+          console.log('VALIDATION OK');
+          "
+
+  render:
+    name: Render video
+    runs-on: ubuntu-latest
+    needs: validate
 
     permissions:
       contents: read
@@ -18,12 +69,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: npm
 
-      - name: Install system dependencies
+      # IMPORTANTE:
+      # Ubuntu 24.04 usa libasound2t64.
+      # NO usar libasound2.
+      - name: Install FFmpeg and Chromium dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             ffmpeg \
             chromium \
@@ -43,67 +98,120 @@ jobs:
             fonts-liberation \
             fonts-dejavu-core
 
-      - name: Verify system dependencies
-        run: |
-          echo "Verificando FFmpeg..."
+          echo "FFmpeg:"
           ffmpeg -version | head -n 1
 
-          echo "Verificando Chromium..."
+          echo "Chromium:"
           chromium --version
 
-          echo "Verificando arquitectura..."
-          uname -m
-
-          echo "Verificando que libasound2 NO exista en el workflow..."
-          if grep -Rni --exclude-dir=.git "libasound2[^t]" .github/workflows; then
-            echo "ERROR: Se encontró una referencia incorrecta a libasound2."
-            exit 1
-          fi
-
-          echo "OK: libasound2 no está siendo utilizado."
-
-      - name: Install project dependencies
-        run: npm install
-
-      - name: Build workspaces
-        run: npm run build
-
-      - name: Prepare output directory
+      - name: Install root dependencies
         run: |
-          mkdir -p out
-          rm -f out/cafe-40s.mp4
-
-      - name: Run Remotion render
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
-        run: |
-          cd remotion
           npm install
 
-          node render.js \
-            ../projects/El-viaje-del-cafe/scene.json \
-            ../out/cafe-40s.mp4
-
-      - name: Verify rendered video
+      - name: Install Remotion dependencies
+        working-directory: remotion
         run: |
-          if [ ! -f "out/cafe-40s.mp4" ]; then
-            echo "ERROR: No se generó out/cafe-40s.mp4"
+          npm install
+
+      - name: Generate video project
+        env:
+          VIDEO_DURATION: ${{ inputs.duration }}
+          VIDEO_TITLE: ${{ inputs.title }}
+        run: |
+          node scripts/generate-project.js \
+            --duration "$VIDEO_DURATION" \
+            --title "$VIDEO_TITLE"
+
+      - name: Validate generated scene
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const file = "projects/El-viaje-del-cafe/scene.json";
+
+          if (!fs.existsSync(file)) {
+            throw new Error("No existe scene.json");
+          }
+
+          const data = JSON.parse(fs.readFileSync(file, "utf8"));
+
+          const requested = Number(process.env.VIDEO_DURATION || 60);
+
+          const total = data.scenes.reduce(
+            (sum, scene) => sum + Number(scene.duration || 0),
+            0
+          );
+
+          console.log("Título:", data.title);
+          console.log("Duración solicitada:", requested);
+          console.log("Duración generada:", total);
+          console.log("Escenas:", data.scenes.length);
+
+          if (total !== requested) {
+            throw new Error(
+              `Duración incorrecta. Esperada: ${requested}. Generada: ${total}`
+            );
+          }
+
+          console.log("SCENE VALIDATION OK");
+          NODE
+
+      - name: Build Remotion
+        working-directory: remotion
+        run: |
+          npx remotion compositions src/index.tsx
+
+      - name: Render MP4
+        env:
+          VIDEO_DURATION: ${{ inputs.duration }}
+        run: |
+          mkdir -p out
+
+          OUTPUT="out/video-${VIDEO_DURATION}s.mp4"
+
+          echo "===================================="
+          echo "RENDER DEL VIDEO"
+          echo "Duración: ${VIDEO_DURATION} segundos"
+          echo "Salida: ${OUTPUT}"
+          echo "===================================="
+
+          node remotion/render.js \
+            projects/El-viaje-del-cafe/scene.json \
+            "$OUTPUT"
+
+          echo "Render terminado."
+
+          if [ ! -f "$OUTPUT" ]; then
+            echo "ERROR: No se generó el MP4."
             exit 1
           fi
 
-          echo "Video generado correctamente:"
-          ls -lh out/cafe-40s.mp4
+          echo "MP4 generado correctamente:"
+          ls -lh "$OUTPUT"
 
-          echo "Información del video:"
-          ffprobe -v error \
-            -show_entries format=duration,size \
-            -of default=noprint_wrappers=1 \
-            out/cafe-40s.mp4
+          echo "Duración real del MP4:"
+          ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            "$OUTPUT"
 
-      - name: Upload video artifact
+      - name: Upload video
         uses: actions/upload-artifact@v4
         with:
-          name: cafe-40s
-          path: out/cafe-40s.mp4
+          name: video-${{ inputs.duration }}s
+          path: out/video-${{ inputs.duration }}s.mp4
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Render summary
+        env:
+          VIDEO_DURATION: ${{ inputs.duration }}
+        run: |
+          echo "===================================="
+          echo "VIDEO LISTO"
+          echo "===================================="
+          echo "Duración solicitada: ${VIDEO_DURATION} segundos"
+          echo "Archivo: video-${VIDEO_DURATION}s.mp4"
+          echo "Artifact: video-${VIDEO_DURATION}s"
+          echo "===================================="
