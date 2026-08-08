@@ -7,11 +7,10 @@
     "remotion"
   ],
   "scripts": {
-    "install:all": "npm install --workspaces",
     "dev:web": "cd web && npm run dev",
     "dev:api": "cd api && npm run dev",
     "dev:remotion": "cd remotion && npm run start",
-    "build": "npm run build --workspaces",
-    "render:project": "cd remotion && npm run render -- ../projects/El-viaje-del-cafe/scene.json"
+    "render:project": "cd remotion && node ./render.js ../projects/El-viaje-del-cafe/scene.json ../out/cafe-40s.mp4",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }
