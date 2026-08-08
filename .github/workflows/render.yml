@@ -6,7 +6,11 @@ on:
 jobs:
   build-and-render:
     runs-on: ubuntu-latest
-    permissions: write-all
+
+    permissions:
+      contents: read
+      actions: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -14,41 +18,92 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
+          cache: npm
 
-      - name: Install system deps (ffmpeg and Chromium libs)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          # Install FFmpeg and required system libraries for Chromium/Remotion on Ubuntu 24.04 (Noble)
-          # Replace libasound2 with libasound2t64 for Noble where libasound2 has no candidate.
           sudo apt-get install -y \
             ffmpeg \
+            chromium \
             libasound2t64 \
             libnss3 \
             libxss1 \
             libatk-bridge2.0-0 \
             libgtk-3-0 \
             libgbm1 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxrandr2 \
+            libxkbcommon0 \
+            libwayland-client0 \
             fonts-liberation \
-            fonts-dejavu-core || true
+            fonts-dejavu-core
 
-      - name: Install dependencies
+      - name: Verify system dependencies
+        run: |
+          echo "Verificando FFmpeg..."
+          ffmpeg -version | head -n 1
+
+          echo "Verificando Chromium..."
+          chromium --version
+
+          echo "Verificando arquitectura..."
+          uname -m
+
+          echo "Verificando que libasound2 NO exista en el workflow..."
+          if grep -Rni --exclude-dir=.git "libasound2[^t]" .github/workflows; then
+            echo "ERROR: Se encontró una referencia incorrecta a libasound2."
+            exit 1
+          fi
+
+          echo "OK: libasound2 no está siendo utilizado."
+
+      - name: Install project dependencies
         run: npm install
 
       - name: Build workspaces
-        run: npm run build || true
+        run: npm run build
+
+      - name: Prepare output directory
+        run: |
+          mkdir -p out
+          rm -f out/cafe-40s.mp4
 
       - name: Run Remotion render
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         run: |
-          cd remotion || exit 1
+          cd remotion
           npm install
-          node ../remotion/render.js ../projects/El-viaje-del-cafe/scene.json ../out/cafe-40s.mp4
 
-      - name: Upload artifact
+          node render.js \
+            ../projects/El-viaje-del-cafe/scene.json \
+            ../out/cafe-40s.mp4
+
+      - name: Verify rendered video
+        run: |
+          if [ ! -f "out/cafe-40s.mp4" ]; then
+            echo "ERROR: No se generó out/cafe-40s.mp4"
+            exit 1
+          fi
+
+          echo "Video generado correctamente:"
+          ls -lh out/cafe-40s.mp4
+
+          echo "Información del video:"
+          ffprobe -v error \
+            -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 \
+            out/cafe-40s.mp4
+
+      - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
           name: cafe-40s
-          path: remotion/../out/cafe-40s.mp4
+          path: out/cafe-40s.mp4
+          if-no-files-found: error
