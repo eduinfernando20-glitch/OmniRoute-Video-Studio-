@@ -1,0 +1,43 @@
+name: CI - build and render
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-render:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install system deps (ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspaces
+        run: npm run build || true
+
+      - name: Run Remotion render
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
+        run: |
+          cd remotion || exit 1
+          npm ci
+          node ../remotion/render.js ../projects/El-viaje-del-cafe/scene.json ../out/el-viaje-del-cafe.mp4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: el-viaje-del-cafe
+          path: remotion/../out/el-viaje-del-cafe.mp4
