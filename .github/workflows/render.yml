@@ -22,7 +22,7 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build workspaces
         run: npm run build || true
@@ -33,7 +33,7 @@ jobs:
           ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_KEY }}
         run: |
           cd remotion || exit 1
-          npm ci
+          npm install
           node ../remotion/render.js ../projects/El-viaje-del-cafe/scene.json ../out/el-viaje-del-cafe.mp4
 
       - name: Upload artifact
