@@ -13,8 +13,23 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Show node / npm versions
+        run: |
+          node --version
+          npm --version
+
+      - name: List workspace package files
+        run: |
+          ls -la
+          ls -la web || true
+          ls -la api || true
+          ls -la remotion || true
+          if [ -f package-lock.json ]; then echo "package-lock.json exists"; else echo "package-lock.json NOT found"; fi
+
       - name: Install deps (root)
-        run: npm ci
+        run: |
+          # Use npm install when package-lock.json is missing or when workspaces are used without lockfile
+          npm install --no-audit --no-fund
 
       - name: TypeScript check
         run: |
@@ -32,18 +47,33 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Show node / npm versions
+        run: |
+          node --version
+          npm --version
+
       - name: Install system deps (ffmpeg, chromium, libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium libnss3 libatk1.0-0 libxss1 libasound2 libgbm1 libgtk-3-0 fonts-liberation libx11-xcb1
+          sudo apt-get install -y ffmpeg chromium chromium-browser chromium-chromedriver libnss3 libatk1.0-0 libxss1 libasound2 libgbm1 libgtk-3-0 fonts-liberation libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 libxrandr2 libxkbcommon0 libwayland-client0
 
       - name: Install deps (root)
-        run: npm ci
+        run: |
+          npm install --no-audit --no-fund
 
       - name: Install remotion deps
         run: |
           cd remotion || exit 1
-          npm ci
+          npm install --no-audit --no-fund
+
+      - name: Find Chrome executable
+        id: find_chrome
+        run: |
+          if command -v chromium >/dev/null 2>&1; then CHROME_PATH=$(command -v chromium)
+          elif command -v chromium-browser >/dev/null 2>&1; then CHROME_PATH=$(command -v chromium-browser)
+          else CHROME_PATH=/usr/bin/chromium
+          fi
+          echo "chrome_path=$CHROME_PATH" >> $GITHUB_OUTPUT
 
       - name: Ensure out directory
         run: mkdir -p out && ls -la
@@ -51,6 +81,7 @@ jobs:
       - name: Run Remotion render (demo)
         env:
           DEMO_MODE: 'true'
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.find_chrome.outputs.chrome_path }}
         run: |
           npm run render:project || exit 0
 
