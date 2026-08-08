@@ -1,0 +1,11 @@
+{
+  "title": "El viaje del café",
+  "duration": 40,
+  "fps": 30,
+  "format": "9:16",
+  "scenes": [
+    { "id": "s1", "title": "Introducción", "duration": 8, "prompt": "Paisaje de cafetales al amanecer, estilo cinematográfico" },
+    { "id": "s2", "title": "Proceso", "duration": 20, "prompt": "Close ups de granos de cafe, secuencia narrativa" },
+    { "id": "s3", "title": "Cierre", "duration": 12, "prompt": "Taza de cafe humeante y logo, tono emotivo" }
+  ]
+}

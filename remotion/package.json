@@ -1,0 +1,15 @@
+{
+  "name": "remotion",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "remotion preview",
+    "build": "remotion build src/index.tsx --webpack-cache-dir .cache",
+    "render": "node ./render.js"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "remotion": "7.0.0"
+  }
+}
