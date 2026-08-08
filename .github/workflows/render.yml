@@ -16,12 +16,21 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install system deps (ffmpeg, chromium, libs)
+      - name: Install system deps (ffmpeg and Chromium libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg wget unzip ca-certificates
-          # Install chromium dependencies (common set), adjusted for Ubuntu 24.04 naming
-          sudo apt-get install -y libx11-6 libxkbcommon0 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libxss1 libasound2t64 libnss3 libnspr4 libxcomposite1 libxrandr2 libxdamage1 libwayland-client0 libwayland-cursor0 libwayland-egl1 libepoxy0 || true
+          # Install FFmpeg and required system libraries for Chromium/Remotion on Ubuntu 24.04 (Noble)
+          # Replace libasound2 with libasound2t64 for Noble where libasound2 has no candidate.
+          sudo apt-get install -y \
+            ffmpeg \
+            libasound2t64 \
+            libnss3 \
+            libxss1 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libgbm1 \
+            fonts-liberation \
+            fonts-dejavu-core || true
 
       - name: Install dependencies
         run: npm install
