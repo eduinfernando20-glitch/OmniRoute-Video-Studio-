@@ -1,0 +1,57 @@
+name: CI - validate & render
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install deps (root)
+        run: npm ci
+
+      - name: TypeScript check
+        run: |
+          npm run typecheck || true
+
+  render:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install system deps (ffmpeg, chromium, libs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg chromium-browser libnss3 libatk1.0-0 libxss1 libasound2 libgbm1 libgtk-3-0 fonts-liberation
+
+      - name: Install deps (root)
+        run: npm ci
+
+      - name: Install remotion deps
+        run: |
+          cd remotion || exit 1
+          npm ci
+
+      - name: Run Remotion render (demo)
+        env:
+          DEMO_MODE: 'true'
+        run: |
+          npm run render:project || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafe-40s
+          path: remotion/../out/cafe-40s.mp4
